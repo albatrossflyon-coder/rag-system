@@ -1,7 +1,7 @@
 """Semantic chunking strategy (preserve boundaries, not naive splits)."""
 
 from typing import List, Dict, Any
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 class SemanticChunker:
     """Split documents semantically (respects sentence/section boundaries)."""
