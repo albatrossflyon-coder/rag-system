@@ -1,10 +1,8 @@
 """Load corpus from various formats (markdown, PDF, JSON)."""
 
-import os
-from pathlib import Path
-from typing import List, Dict, Any
-from langchain_community.document_loaders import TextLoader, UnstructuredPDFLoader
 import json
+from pathlib import Path
+from typing import Any, Dict, List
 
 class CorpusLoader:
     """Load documents from corpus directory."""
@@ -16,14 +14,11 @@ class CorpusLoader:
         """Load all .md files."""
         docs = []
         for md_file in self.corpus_path.glob("*.md"):
-            loader = TextLoader(str(md_file))
-            pages = loader.load()
-            for page in pages:
-                docs.append({
-                    "content": page.page_content,
-                    "source": md_file.name,
-                    "format": "markdown"
-                })
+            docs.append({
+                "content": md_file.read_text(encoding="utf-8"),
+                "source": md_file.name,
+                "format": "markdown"
+            })
         return docs
     
     def load_json(self) -> List[Dict[str, Any]]:

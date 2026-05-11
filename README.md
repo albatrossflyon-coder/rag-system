@@ -2,6 +2,8 @@
 
 **Phase 1 Complete:** Domain-agnostic architecture with hybrid retrieval, reranking, evaluation, and observability.
 
+**Phase 1b in progress:** the local corpus now bootstraps into an in-memory hybrid index on startup so the sample corpus can be exercised end-to-end before cloud deployment.
+
 ## Architecture
 
 ```
@@ -31,7 +33,8 @@ pip install -r requirements.txt
 ### 2. Configure
 ```bash
 cp .env.example .env
-# Fill in your API keys: ANTHROPIC_API_KEY, PINECONE_API_KEY, etc.
+# Fill in ANTHROPIC_API_KEY for live answer generation.
+# Cohere and Pinecone are optional for the local corpus run.
 ```
 
 ### 3. Load Corpus
@@ -52,6 +55,19 @@ python main.py
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
   -d '{"query": "What is in the corpus?"}'
+```
+
+### 6. Run the local pipeline checks
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+### 7. Query the local corpus without the API server
+```bash
+python query_local.py "What is MCP?"
+
+# Generate a final answer too (requires ANTHROPIC_API_KEY)
+python query_local.py "What is MCP?" --answer
 ```
 
 ## Project Structure
