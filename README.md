@@ -1,73 +1,69 @@
-# RAG System — Production-Grade "Ask My Docs"
+# Grounded RAG System
 
-**Phase 1 Complete:** Domain-agnostic architecture with hybrid retrieval, reranking, evaluation, and observability.
+A production-grade retrieval-augmented generation architecture built to eliminate hallucinations and provide grounded, source-cited answers from private document corpora.
 
-**Phase 1b in progress:** the local corpus now bootstraps into an in-memory hybrid index on startup so the sample corpus can be exercised end-to-end before cloud deployment.
+**Stack:** FastAPI · LangChain · Claude API · Chroma (local) / Pinecone (cloud) · Ragas evaluation
+
+---
+
+## The Problem It Solves
+
+Stock LLMs hallucinate. When you need an AI to answer questions from *your* documents — contracts, specs, internal knowledge bases — you can't afford wrong answers. This system retrieves the exact source passages, reranks them by relevance, generates an answer grounded only in that context, and scores itself for faithfulness before returning a response.
 
 ## Architecture
 
 ```
-Query → Retrieval (BM25 + Vector) → Reranking (Cross-Encoder) → Generation (Claude) → Sources
-                ↓
-          Evaluation (Ragas metrics)
+Query
+  → Hybrid Retrieval (BM25 sparse + dense vector, RRF fusion)
+  → Cross-Encoder Reranking
+  → Claude Generation (grounded to retrieved context only)
+  → Ragas Evaluation (faithfulness, relevance, context precision)
+  → Response + Source Citations
 ```
 
-**Key Features:**
-- ✅ Hybrid search (sparse + dense)
-- ✅ Cross-encoder reranking
-- ✅ Semantic chunking (not naive splits)
-- ✅ Ragas evaluation (faithfulness, relevance, precision)
-- ✅ Structured logging for observability
-- ✅ FastAPI with CORS for Vercel frontend
+**Key design decisions:**
+- **Hybrid search over vector-only** — BM25 catches exact keyword matches that dense vectors miss (product codes, names, technical terms)
+- **Cross-encoder reranking** — bi-encoder retrieval is fast but imprecise; the reranker re-scores the top-k candidates with full query-passage attention
+- **Semantic chunking over naive splits** — preserves paragraph/section context instead of cutting mid-sentence
+- **Ragas evaluation in the response loop** — catches low-confidence answers before they reach the user
+
+## Features
+
+- Hybrid search (sparse BM25 + dense vector with RRF fusion)
+- Cross-encoder reranking for precision
+- Semantic chunking (not naive character splits)
+- Claude-powered answer generation grounded to retrieved context
+- Ragas evaluation metrics: faithfulness ≥ 0.75, relevance ≥ 0.80
+- FastAPI server with CORS for frontend integration
+- Structured logging for observability
 
 ## Quick Start
 
-### 1. Setup
 ```bash
+git clone https://github.com/albatrossflyon-coder/rag-system
 cd rag-system
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env       # Add your ANTHROPIC_API_KEY
 ```
 
-### 2. Configure
-```bash
-cp .env.example .env
-# Fill in ANTHROPIC_API_KEY for live answer generation.
-# Cohere and Pinecone are optional for the local corpus run.
-```
+Drop your documents (markdown or JSON) into `data/corpus/`, then:
 
-### 3. Load Corpus
-Add markdown or JSON files to `data/corpus/`:
 ```bash
-echo "# Test Doc\nThis is test content." > data/corpus/test.md
-```
+# Start the API server
+cd api && python main.py
 
-### 4. Run API
-```bash
-cd api
-python main.py
-# Server runs on http://localhost:8000
-```
-
-### 5. Test
-```bash
+# Ask a question
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is in the corpus?"}'
-```
+  -d '{"query": "What does the contract say about payment terms?"}'
 
-### 6. Run the local pipeline checks
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
-
-### 7. Query the local corpus without the API server
-```bash
-python query_local.py "What is MCP?"
-
-# Generate a final answer too (requires ANTHROPIC_API_KEY)
+# Query without the server (local pipeline)
 python query_local.py "What is MCP?" --answer
+
+# Run the test suite
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 ## Project Structure
@@ -75,55 +71,40 @@ python query_local.py "What is MCP?" --answer
 ```
 rag-system/
 ├── api/
-│   └── main.py              # FastAPI server
-├── config/
-│   └── settings.py          # Pydantic settings
+│   └── main.py              # FastAPI server — /ask endpoint
 ├── src/
-│   ├── ingestion/           # Corpus loading + semantic chunking
-│   ├── retrieval/           # BM25 + vector (RRF fusion)
+│   ├── ingestion/           # Document loading + semantic chunking
+│   ├── retrieval/           # BM25 + vector hybrid search (RRF)
 │   ├── reranking/           # Cross-encoder reranking
 │   ├── generation/          # Claude answer generation
-│   └── evaluation/          # Ragas metrics
+│   └── evaluation/          # Ragas faithfulness + relevance scoring
+├── config/
+│   └── settings.py          # Pydantic settings
 ├── data/
-│   ├── corpus/              # Your documents (markdown, JSON)
+│   ├── corpus/              # Your documents go here
 │   └── vectors/             # Chroma vector store (local dev)
-├── tests/                   # Unit & integration tests
-├── notebooks/               # Jupyter exploration
-├── requirements.txt         # Dependencies
+├── tests/                   # Unit + integration tests
+├── query_local.py           # CLI query tool (no server needed)
 └── .env.example             # Configuration template
 ```
 
-## Metrics (Phase 1)
+## Evaluation Targets
 
-### Faithfulness
-- Does the generated answer come from context?
-- Target: ≥ 0.75
+| Metric | Target | What it measures |
+|--------|--------|-----------------|
+| Faithfulness | ≥ 0.75 | Answer comes from retrieved context, not hallucination |
+| Answer Relevancy | ≥ 0.80 | Answer actually addresses the question |
+| Context Precision | Tracked | Retrieved chunks are relevant to the query |
 
-### Answer Relevancy
-- Does the answer address the question?
-- Target: ≥ 0.80
+## Configuration
 
-### Context Precision
-- Are retrieved documents relevant?
-- Bonus: Helps debug retrieval pipeline
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Claude answer generation |
+| `PINECONE_API_KEY` | No | Cloud vector store (uses local Chroma if omitted) |
+| `COHERE_API_KEY` | No | Cohere reranker (uses local cross-encoder if omitted) |
 
-## What's NOT in Phase 1
+## Built By
 
-- Stripe/payment (Phase 2)
-- YouTube API integration (Phase 2)
-- Auth/login (local only)
-- Vercel frontend (separate repo)
-- Production Pinecone setup (use local Chroma for dev)
-
-## Next Steps
-
-1. **Phase 1b:** Load real corpus, test end-to-end
-2. **Phase 2:** Cloud deployment (Railway backend, Vercel frontend)
-3. **Phase 3:** Observability dashboard + evaluation metrics
-4. **Phase 4:** Add Vercel, Railway tokens; deploy live
-
-## References
-
-- [LangChain RAG](https://docs.langchain.com/oss/python/langchain/rag)
-- [Ragas Evaluation](https://docs.ragas.io/)
-- [FastAPI](https://fastapi.tiangolo.com/)
+[Chris Brown](https://albatrossai.online) — AI Infrastructure Lead  
+[github.com/albatrossflyon-coder](https://github.com/albatrossflyon-coder)
