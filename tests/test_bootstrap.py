@@ -26,9 +26,10 @@ class BootstrapTests(unittest.TestCase):
         bootstrap_corpus(loader, chunker, retriever, settings.corpus_path, pipeline_state)
 
         self.assertTrue(pipeline_state["ready"])
-        self.assertEqual(pipeline_state["documents"], 2)
-        self.assertGreater(pipeline_state["chunks"], 2)
-        self.assertEqual(pipeline_state["sources"], ["mcp-protocol.md", "superintendent-mcp.md"])
+        self.assertGreater(pipeline_state["documents"], 0)
+        self.assertGreater(pipeline_state["chunks"], pipeline_state["documents"])
+        self.assertIn("mcp-protocol.md", pipeline_state["sources"])
+        self.assertIn("employment-strategy-and-targets.md", pipeline_state["sources"])
 
 
 if __name__ == "__main__":

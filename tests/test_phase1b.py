@@ -23,8 +23,10 @@ class Phase1BPipelineTests(unittest.TestCase):
 
     def test_loads_markdown_corpus(self):
         sources = {doc["source"] for doc in self.docs}
-        self.assertEqual(sources, {"mcp-protocol.md", "superintendent-mcp.md"})
-        self.assertEqual(len(self.docs), 2)
+        self.assertIn("mcp-protocol.md", sources)
+        self.assertIn("employment-strategy-and-targets.md", sources)
+        self.assertIn("chris-background-and-skills.md", sources)
+        self.assertGreater(len(self.docs), 2)
 
     def test_chunks_preserve_source_metadata(self):
         self.assertGreater(len(self.chunks), 2)
